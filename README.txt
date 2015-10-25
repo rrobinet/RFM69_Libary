@@ -1,6 +1,6 @@
 Update of 23/10/2015
 
-This RFM69 Library merges the current and official one of Felix Rusus dated of the 2nd of October 2015 (See https://github.com/LowPowerLab/RFM69) and the patch for the Ethernet / RFM69 interrupt when a RFM69 transceiver is used with and Ethernet Shield; issue solved by kiwisincebirth  (see https://github.com/kiwisincebirth/RFM69).
+This RFM69 Library merges the current and official one of Felix Rusu dated of the 2nd of October 2015 (See https://github.com/LowPowerLab/RFM69) and the patch for the Ethernet / RFM69 interrupt when a RFM69 transceiver is used with and Ethernet Shield; issue solved by kiwisincebirth  (see https://github.com/kiwisincebirth/RFM69).
 It also include an extension of the Ctrl Byte (see RFM69.h) which is used by the RFM69_SessionKey library made by dewoodruff (see https:https://github.com/dewoodruff/RFM69_SessionKey).
 The definition ….
 // TWS: define CTLbyte bits
