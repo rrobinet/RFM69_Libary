@@ -1,3 +1,12 @@
+/* From ROB: 4/10/2016
+  This RFM69 library implements the SPI TRANSACTION patch that overcomes multiple SPI devices deadlock.
+  See https://lowpowerlab.com/forum/moteino/moteino-w5100-ethernet-spi-support-spi_has_transaction/msg5132/#msg5132 
+  It includes a work around to make these changes compatible with ESP8266 micro-controllers.
+  Despite the fact that there is no version management, the source code reference of this library is the one downloaded 
+  from the https://github.com/LowPowerLab/RFM69 the 4/10/2016
+  It also add extra definition introduced by TWS for the Control Byte used by secure RFM_SessionKey library.
+  All modifications are surrounded by !!! ROB.  
+*/  
 // **********************************************************************************
 // Driver definition for HopeRF RFM69W/RFM69HW/RFM69CW/RFM69HCW, Semtech SX1231/1231H
 // **********************************************************************************
@@ -41,6 +50,7 @@ volatile uint8_t RFM69::PAYLOADLEN;
 volatile uint8_t RFM69::ACK_REQUESTED;
 volatile uint8_t RFM69::ACK_RECEIVED; // should be polled immediately after sending a packet with ACK request
 volatile int16_t RFM69::RSSI;          // most accurate RSSI during reception (closest to the reception)
+volatile bool RFM69::_inISR;
 RFM69* RFM69::selfPointer;
 
 bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
@@ -109,11 +119,12 @@ bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
   while (((readReg(REG_IRQFLAGS1) & RF_IRQFLAGS1_MODEREADY) == 0x00) && millis()-start < timeout); // wait for ModeReady
   if (millis()-start >= timeout)
     return false;
-//!!!!!!
-#ifdef SPI_HAS_TRANSACTION
+  _inISR = false;
+//!!! ROB
+#if defined (SPI_HAS_TRANSACTION) && !defined (ESP8266) 
   SPI.usingInterrupt(_interruptNum);
 #endif
-//!!!!!!!    
+//!!! ROB   
   attachInterrupt(_interruptNum, RFM69::isr0, RISING);
 
   selfPointer = this;
@@ -273,6 +284,7 @@ void RFM69::sendACK(const void* buffer, uint8_t bufferSize) {
   writeReg(REG_PACKETCONFIG2, (readReg(REG_PACKETCONFIG2) & 0xFB) | RF_PACKET2_RXRESTART); // avoid RX deadlocks
   uint32_t now = millis();
   while (!canSend() && millis() - now < RF69_CSMA_LIMIT_MS) receiveDone();
+  SENDERID = sender;    // TWS: Restore SenderID after it gets wiped out by receiveDone()
   sendFrame(sender, buffer, bufferSize, false, true);
   RSSI = _RSSI; // restore payload RSSI
 }
@@ -357,7 +369,7 @@ void RFM69::interruptHandler() {
 }
 
 // internal function
-void RFM69::isr0() { selfPointer->interruptHandler(); }
+void RFM69::isr0() { _inISR = true; selfPointer->interruptHandler(); _inISR = false; }
 
 // internal function
 void RFM69::receiveBegin() {
@@ -378,31 +390,38 @@ void RFM69::receiveBegin() {
 bool RFM69::receiveDone() {
 //ATOMIC_BLOCK(ATOMIC_FORCEON)
 //{
-//!!!!!!
-uint8_t rd_SREG = SREG;
-//!!!!!
+//!!! ROB
+#ifdef SREG
+ _SREG = SREG;
+#endif 
+//!!! ROB 	
   noInterrupts(); // re-enabled in unselect() via setMode() or via receiveBegin()
   if (_mode == RF69_MODE_RX && PAYLOADLEN > 0)
   {
     setMode(RF69_MODE_STANDBY); // enables interrupts
-//!!!
-SREG = rd_SREG; // restore interrupts    
-//!!!
+//!!! ROB
+#ifdef SREG    
+    SREG = _SREG; // restore interrupts
+#endif 
+//!!! ROB       
     return true;
   }
   else if (_mode == RF69_MODE_RX) // already in RX no payload yet
   {
-//!!!
-SREG = rd_SREG; // restore interrupts    
-//    interrupts(); // explicitly re-enable interrupts
-//!!!
+//!!! ROB
+#ifdef SREG    
+    SREG = _SREG; // restore interrupts
+#endif 
+//!!! ROB
+    interrupts(); // explicitly re-enable interrupts
     return false;
   }
+//!!! ROB
+#ifdef SREG    
+    SREG = _SREG; // restore interrupts
+#endif 
+//!!! ROB  
   receiveBegin();
-//!!!
-SREG = rd_SREG; // restore interrupts    
-//!!!  
-  
   return false;
 //}
 }
@@ -456,48 +475,51 @@ void RFM69::writeReg(uint8_t addr, uint8_t value)
 
 // select the RFM69 transceiver (save SPI settings, set CS low)
 void RFM69::select() {
-//!!!
+//!!! ROB
 #ifdef SPI_HAS_TRANSACTION
-  _SPCR = SPCR;
-  _SPSR = SPSR;
-  SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
-#else
-  _SREG = SREG;
-//!!!  	
+  SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));  
+#else  
+//!!! ROB
   noInterrupts();
+//!!! ROB
+#ifdef SREG
+_SREG = SREG;
+#endif
+//!!! ROB  
+#if defined (SPCR) && defined (SPSR)
   // save current SPI settings
   _SPCR = SPCR;
   _SPSR = SPSR;
+#endif
   // set RFM69 SPI settings
   SPI.setDataMode(SPI_MODE0);
   SPI.setBitOrder(MSBFIRST);
   SPI.setClockDivider(SPI_CLOCK_DIV4); // decided to slow down from DIV2 after SPI stalling in some instances, especially visible on mega1284p when RFM69 and FLASH chip both present
-//!!!
-#endif
-//!!!  
+#endif  // ROB
   digitalWrite(_slaveSelectPin, LOW);
 }
 
 // unselect the RFM69 transceiver (set CS high, restore SPI settings)
 void RFM69::unselect() {
   digitalWrite(_slaveSelectPin, HIGH);
-//!!!
+//!!! ROB
 #ifdef SPI_HAS_TRANSACTION
   SPI.endTransaction();
-//!!!    
+#else     
+//!!! ROB
   // restore SPI settings to what they were before talking to RFM69
+#if defined (SPCR) && defined (SPSR)
   SPCR = _SPCR;
   SPSR = _SPSR;
-//!!!
-#else  
-  // restore SPI settings to what they were before talking to RFM69
-  SPCR = _SPCR;
-  SPSR = _SPSR;
+#endif
   // restore the prior interrupt state
+//!! ROB
+#ifdef SREG  
   SREG = _SREG;
 #endif  
-//  interrupts();
-//!!!
+#endif 
+//!!! ROB
+  maybeInterrupts();
 }
 
 // true  = disable filtering to capture all frames on network
@@ -824,4 +846,10 @@ void RFM69::rcCalibration()
 {
   writeReg(REG_OSC1, RF_OSC1_RCCAL_START);
   while ((readReg(REG_OSC1) & RF_OSC1_RCCAL_DONE) == 0x00);
+}
+
+inline void RFM69::maybeInterrupts()
+{
+  // Only reenable interrupts if we're not being called from the ISR
+  if (!_inISR) interrupts();
 }

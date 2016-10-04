@@ -1,3 +1,12 @@
+/* From ROB: 4/10/2016
+  This RFM69 library implements the SPI TRANSACTION patch that overcomes multiple SPI devices deadlock.
+  See https://lowpowerlab.com/forum/moteino/moteino-w5100-ethernet-spi-support-spi_has_transaction/msg5132/#msg5132 
+  It includes a work around to make these changes compatible with ESP8266 micro-controllers.
+  Despite the fact that there is no version management, the source code reference of this library is the one downloaded 
+  from the https://github.com/LowPowerLab/RFM69 the 4/10/2016
+  It also add extra definition introduced by TWS for the Control Byte used by secure RFM_SessionKey library.
+  All modifications are surrounded by !!! ROB.  
+*/  
 // **********************************************************************************
 // Driver definition for HopeRF RFM69W/RFM69HW/RFM69CW/RFM69HCW, Semtech SX1231/1231H
 // **********************************************************************************
@@ -45,6 +54,9 @@
 #elif defined(__AVR_ATmega32U4__)
   #define RF69_IRQ_PIN          3
   #define RF69_IRQ_NUM          0
+#elif defined(__arm__)//Use pin 10 or any pin you want
+  #define RF69_IRQ_PIN          10
+  #define RF69_IRQ_NUM          10
 #else 
   #define RF69_IRQ_PIN          2
   #define RF69_IRQ_NUM          0  
@@ -74,14 +86,14 @@
 // TWS: define CTLbyte bits
 #define RFM69_CTL_SENDACK   0x80
 #define RFM69_CTL_REQACK    0x40
-//!!!
+//!!! ROB					     
 #define RFM69_CTL_RESERVE1  0x20
 #define RFM69_CTL_RESERVE2  0x10
-#define RFM69_CTL_EXT1      0x08   // reserve for RFM69 derived classes to use
-#define RFM69_CTL_EXT2      0x04
+#define RFM69_CTL_EXT1      0x08    // Extended control Bytes used by RFM_SessionKey
+#define RFM69_CTL_EXT2      0x04    //Extended control Bytes used by RFM_SessionKey
 #define RFM69_CTL_EXT3      0x02
 #define RFM69_CTL_EXT4      0x01
-//!!!
+//!!! ROB
 
 class RFM69 {
   public:
@@ -136,6 +148,7 @@ class RFM69 {
     static void isr0();
     void virtual interruptHandler();
     virtual void interruptHook(uint8_t CTLbyte) {};
+    static volatile bool _inISR;
     virtual void sendFrame(uint8_t toAddress, const void* buffer, uint8_t size, bool requestACK=false, bool sendACK=false);
 
     static RFM69* selfPointer;
@@ -146,14 +159,21 @@ class RFM69 {
     bool _promiscuousMode;
     uint8_t _powerLevel;
     bool _isRFM69HW;
+#if defined (SPCR) && defined (SPSR)
     uint8_t _SPCR;
     uint8_t _SPSR;
-
+#endif
+//!!! ROB
+#if defined (SREG) // To identify AVR vs EP8266
+    uint8_t _SREG; // Used to saved and restore the SREG values in SPI transactions
+#endif
+//!!! ROB
     virtual void receiveBegin();
     virtual void setMode(uint8_t mode);
     virtual void setHighPowerRegs(bool onOff);
     virtual void select();
     virtual void unselect();
+    inline void maybeInterrupts();
 };
 
 #endif
