@@ -89,8 +89,8 @@
 //!!! ROB					     
 #define RFM69_CTL_RESERVE1  0x20
 #define RFM69_CTL_RESERVE2  0x10
-#define RFM69_CTL_EXT1      0x08    // Extended control Bytes used by RFM_SessionKey
-#define RFM69_CTL_EXT2      0x04    //Extended control Bytes used by RFM_SessionKey
+#define RFM69_CTL_EXT1      0x08	// Extended control Bytes used by RFM_SessionKey (Session Requested)
+#define RFM69_CTL_EXT2      0x04    // Extended control Bytes used by RFM_SessionKey (Session Included)
 #define RFM69_CTL_EXT3      0x02
 #define RFM69_CTL_EXT4      0x01
 //!!! ROB
