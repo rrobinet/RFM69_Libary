@@ -5,8 +5,10 @@
   Despite the fact that there is no version management, the source code reference of this library is the one downloaded 
   from the https://github.com/LowPowerLab/RFM69 the 4/10/2016
   It also add extra definition introduced by TWS for the Control Byte used by secure RFM_SessionKey library.
-  All modifications are surrounded by !!! ROB.  
-*/  
+/* From ROB: 21/05/2017 
+   Return false status if no RFM transciever is installed by checking valid value of the REG_IRQFLAGS1 register
+   
+    All modifications are surrounded by !!! ROB.   */
 // **********************************************************************************
 // Driver definition for HopeRF RFM69W/RFM69HW/RFM69CW/RFM69HCW, Semtech SX1231/1231H
 // **********************************************************************************
@@ -54,7 +56,7 @@ volatile bool RFM69::_inISR;
 RFM69* RFM69::selfPointer;
 
 bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
-{
+{  
   const uint8_t CONFIG[][2] =
   {
     /* 0x01 */ { REG_OPMODE, RF_OPMODE_SEQUENCER_ON | RF_OPMODE_LISTEN_OFF | RF_OPMODE_STANDBY },
@@ -100,6 +102,9 @@ bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
   digitalWrite(_slaveSelectPin, HIGH);
   pinMode(_slaveSelectPin, OUTPUT);
   SPI.begin();
+//!!! ROB
+  if (readReg(REG_IRQFLAGS1) == 255) return false; // return false if no RFM transciever is installed
+//!!!
   unsigned long start = millis();
   uint8_t timeout = 50;
   do writeReg(REG_SYNCVALUE1, 0xAA); while (readReg(REG_SYNCVALUE1) != 0xaa && millis()-start < timeout);
@@ -112,7 +117,6 @@ bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
   // Encryption is persistent between resets and can trip you up during debugging.
   // Disable it during initialization so we always start from a known state.
   encrypt(0);
-
   setHighPower(_isRFM69HW); // called regardless if it's a RFM69W or RFM69HW
   setMode(RF69_MODE_STANDBY);
   start = millis();
@@ -163,7 +167,7 @@ void RFM69::setMode(uint8_t newMode)
   switch (newMode) {
     case RF69_MODE_TX:
       writeReg(REG_OPMODE, (readReg(REG_OPMODE) & 0xE3) | RF_OPMODE_TRANSMITTER);
-      if (_isRFM69HW) setHighPowerRegs(true);
+      if (_isRFM69HW) setHighPowerRegs(true);  	      
       break;
     case RF69_MODE_RX:
       writeReg(REG_OPMODE, (readReg(REG_OPMODE) & 0xE3) | RF_OPMODE_RECEIVER);
@@ -255,11 +259,11 @@ bool RFM69::sendWithRetry(uint8_t toAddress, const void* buffer, uint8_t bufferS
     {
       if (ACKReceived(toAddress))
       {
-        //Serial.print(" ~ms:"); Serial.print(millis() - sentTime);
+        //Serial.print(" ~ms:"); Serial.println(millis() - sentTime);
         return true;
       }
     }
-    //Serial.print(" RETRY#"); Serial.println(i + 1);
+    //Serial.print(" RETRY#"); Serial.print(i + 1);
   }
   return false;
 }
@@ -293,6 +297,7 @@ void RFM69::sendACK(const void* buffer, uint8_t bufferSize) {
 void RFM69::sendFrame(uint8_t toAddress, const void* buffer, uint8_t bufferSize, bool requestACK, bool sendACK)
 {
   setMode(RF69_MODE_STANDBY); // turn off receiver to prevent reception while filling fifo
+/// BLOCAGE 2//      
   while ((readReg(REG_IRQFLAGS1) & RF_IRQFLAGS1_MODEREADY) == 0x00); // wait for ModeReady
   writeReg(REG_DIOMAPPING1, RF_DIOMAPPING1_DIO0_00); // DIO0 is "Packet Sent"
   if (bufferSize > RF69_MAX_DATA_LEN) bufferSize = RF69_MAX_DATA_LEN;
@@ -329,7 +334,7 @@ void RFM69::interruptHandler() {
   //pinMode(4, OUTPUT);
   //digitalWrite(4, 1);
   if (_mode == RF69_MODE_RX && (readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY))
-  {
+  { 
     //RSSI = readRSSI();
     setMode(RF69_MODE_STANDBY);
     select();
@@ -346,16 +351,13 @@ void RFM69::interruptHandler() {
       //digitalWrite(4, 0);
       return;
     }
-
     DATALEN = PAYLOADLEN - 3;
     SENDERID = SPI.transfer(0);
     uint8_t CTLbyte = SPI.transfer(0);
-
     ACK_RECEIVED = CTLbyte & RFM69_CTL_SENDACK; // extract ACK-received flag
     ACK_REQUESTED = CTLbyte & RFM69_CTL_REQACK; // extract ACK-requested flag
-    
+   
     interruptHook(CTLbyte);     // TWS: hook to derived class interrupt function
-
     for (uint8_t i = 0; i < DATALEN; i++)
     {
       DATA[i] = SPI.transfer(0);
@@ -534,7 +536,7 @@ void RFM69::setHighPower(bool onOff) {
   _isRFM69HW = onOff;
   writeReg(REG_OCP, _isRFM69HW ? RF_OCP_OFF : RF_OCP_ON);
   if (_isRFM69HW) // turning ON
-    writeReg(REG_PALEVEL, (readReg(REG_PALEVEL) & 0x1F) | RF_PALEVEL_PA1_ON | RF_PALEVEL_PA2_ON); // enable P1 & P2 amplifier stages
+    writeReg(REG_PALEVEL, (readReg(REG_PALEVEL) & 0x1F) | RF_PALEVEL_PA1_ON | RF_PALEVEL_PA2_ON); // enable P1 & P2 amplifier stages    
   else
     writeReg(REG_PALEVEL, RF_PALEVEL_PA0_ON | RF_PALEVEL_PA1_OFF | RF_PALEVEL_PA2_OFF | _powerLevel); // enable P0 only
 }

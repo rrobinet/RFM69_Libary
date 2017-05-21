@@ -5,8 +5,10 @@
   Despite the fact that there is no version management, the source code reference of this library is the one downloaded 
   from the https://github.com/LowPowerLab/RFM69 the 4/10/2016
   It also add extra definition introduced by TWS for the Control Byte used by secure RFM_SessionKey library.
-  All modifications are surrounded by !!! ROB.  
-*/  
+/* From ROB: 21/05/2017 
+   Return false status if no RFM transciever is installed by checking valid value of the REG_IRQFLAGS1 register
+   
+    All modifications are surrounded by !!! ROB.   */  
 // **********************************************************************************
 // Driver definition for HopeRF RFM69W/RFM69HW/RFM69CW/RFM69HCW, Semtech SX1231/1231H
 // **********************************************************************************
