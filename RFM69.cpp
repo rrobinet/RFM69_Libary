@@ -102,12 +102,13 @@ bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
   digitalWrite(_slaveSelectPin, HIGH);
   pinMode(_slaveSelectPin, OUTPUT);
   SPI.begin();
-//!!! ROB
-  if (readReg(REG_IRQFLAGS1) == 255) return false; // return false if no RFM transciever is installed
-//!!!
   unsigned long start = millis();
   uint8_t timeout = 50;
+  Serial.println (start);
   do writeReg(REG_SYNCVALUE1, 0xAA); while (readReg(REG_SYNCVALUE1) != 0xaa && millis()-start < timeout);
+//!!! ROB
+  if (millis()-start >= timeout) return false;              // return false if no RFM transciever is installed
+//!!!
   start = millis();
   do writeReg(REG_SYNCVALUE1, 0x55); while (readReg(REG_SYNCVALUE1) != 0x55 && millis()-start < timeout);
 
