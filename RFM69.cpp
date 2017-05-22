@@ -104,7 +104,6 @@ bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
   SPI.begin();
   unsigned long start = millis();
   uint8_t timeout = 50;
-  Serial.println (start);
   do writeReg(REG_SYNCVALUE1, 0xAA); while (readReg(REG_SYNCVALUE1) != 0xaa && millis()-start < timeout);
 //!!! ROB
   if (millis()-start >= timeout) return false;              // return false if no RFM transciever is installed
