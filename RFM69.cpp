@@ -5,6 +5,8 @@
   Despite the fact that there is no version management, the source code reference of this library is the one downloaded 
   from the https://github.com/LowPowerLab/RFM69 the 4/10/2016
   It also add extra definition introduced by TWS for the Control Byte used by secure RFM_SessionKey library.
+/* From ROB: 15/08/2017 
+ The same issue is encounerd with the ESP32, and extra check is done to avoid the SPI.usingInterrupt(_interruptNum) in case  of a EPS32
 /* From ROB: 21/05/2017 
    Return false status if no RFM transciever is installed by checking valid value of the REG_IRQFLAGS1 register
    
@@ -125,7 +127,7 @@ bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
     return false;
   _inISR = false;
 //!!! ROB
-#if defined (SPI_HAS_TRANSACTION) && !defined (ESP8266) 
+#if defined (SPI_HAS_TRANSACTION) && !defined (ESP8266) && !defined (ESP32)
   SPI.usingInterrupt(_interruptNum);
 #endif
 //!!! ROB   
